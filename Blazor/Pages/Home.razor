@@ -1,0 +1,126 @@
+﻿@page "/"
+@using Blazor.Dtos
+@using Blazor.Events
+
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorageService
+
+@inject IHttpClientFactory Factory;
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+<form>
+    <input type="email" placeholder="enter email" @bind="_email" />
+    <input type="password" placeholder="enter password" @bind="_password" />
+    <button type="button" @onclick="RegisterAsync">Register</button>
+    <button type="button" @onclick="RegisterAsAdminAsync">Register as admin</button>
+    <button type="button" @onclick="LoginAsync">Login</button>
+    <button type="button" @onclick="LogoutAsync">Logout</button>
+</form>
+
+<p>@_info</p>
+
+<AuthorizeView>
+    <ul>
+        @foreach (var animal in _animals)
+        {
+            <li>@animal.Name</li>
+        }
+    </ul>
+</AuthorizeView>
+
+
+@code
+{
+    private HttpClient _httpClient;
+
+    private List<AnimalDto> _animals = new();
+
+
+    private string _email = "";
+    private string _password = "";
+
+    private string _info = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _httpClient = Factory.CreateClient("backend");
+
+        var result = await _httpClient.GetAsync("api/animals");
+
+        if (result.IsSuccessStatusCode)
+        {
+            _animals = await result.Content.ReadFromJsonAsync<List<AnimalDto>>() ?? [];
+        }
+
+        StateHasChanged();
+
+        await base.OnInitializedAsync();
+    }
+
+    public async Task RegisterAsync()
+    {
+        var result = await _httpClient.PostAsJsonAsync("register", new
+        {
+            Email = _email,
+            Password = _password
+        });
+
+        if (result.IsSuccessStatusCode)
+        {
+            _info = "Registration successful!";
+        }
+    }
+    public async Task RegisterAsAdminAsync()
+    {
+        var result = await _httpClient.PostAsJsonAsync("register-admin", new
+        {
+            Email = _email,
+            Password = _password
+        });
+
+        if (result.IsSuccessStatusCode)
+        {
+            _info = "Registration as admin successful!";
+        }
+    }
+    public async Task LoginAsync()
+    {
+        var result = await _httpClient.PostAsJsonAsync("login", new
+        {
+            Email = _email,
+            Password = _password
+        });
+
+        if (result.IsSuccessStatusCode)
+        {
+            var loginDto = await result.Content.ReadFromJsonAsync<LoginResponseDto>();
+
+            if (loginDto is not null)
+            {
+                await LocalStorageService.SetItemAsync("token", loginDto.accessToken);
+                _info = "login success!";
+
+                await AuthPublisher.OnAuthenticationStateChanged();
+                StateHasChanged();
+
+                return;
+            }
+        }
+
+        _info = "login fail :(";
+    }
+
+    public async Task LogoutAsync()
+    {
+        await LocalStorageService.RemoveItemAsync("token");
+        _info = "you logged out";
+        await AuthPublisher.OnAuthenticationStateChanged();
+
+        StateHasChanged();
+    }
+    
+}
